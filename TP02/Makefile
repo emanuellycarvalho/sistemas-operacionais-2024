@@ -1,7 +1,11 @@
+# Makefile in ./
+
 LOGFLAGS=-DUVMLOG -DMMULOG
 CFLAGS=-g -Wall -Isrc -std=gnu99
 
-all:
+.PHONY: all clean
+
+all: clean src_all
 	gcc -c $(CFLAGS) src/log.c
 	gcc -c $(CFLAGS) src/cyc.c
 	gcc -c $(CFLAGS) $(LOGFLAGS) src/uvm.c
@@ -26,14 +30,22 @@ all:
 	gcc $(CFLAGS) mempager-tests/test12.c uvm.a -o bin/test12 -lpthread
 	gcc $(CFLAGS) src/pager.c mmu.a -o bin/mmu -lpthread
 	rm -f uvm.a mmu.a
-	
-clean:
+	clear
+
+src_all:
+	$(MAKE) -C src all
+
+clean: src_clean
 	rm -f *.o *.a
 	rm -f vgcore.*
-	rm -f mmu.sock
+	# rm -f mmu.sock
 	rm -f mmu.pmem.img.*
 	rm -f mmu.log.0
 	rm -f uvm.log.0
 	rm -f test*.out
 	rm -rf bin
 	pgrep --list-full mmu || true
+	clear
+
+src_clean:
+	$(MAKE) -C src clean
