@@ -26,22 +26,22 @@ static int total_blocks;
 static int *frame_table; // Array to keep track of frame usage
 static int clock_hand = 0;
 
-static ProcessInfo *find_process(pid_t pid){
+static ProcessInfo *find_process(pid_t pid) {
     ProcessInfo *proc = process_list;
-    while (proc && proc->pid != pid){
+    while (proc && proc->pid != pid) {
         proc = proc->next;
     }
     return proc;
 }
 
-void pager_init(int nframes, int nblocks){
+void pager_init(int nframes, int nblocks) {
     total_frames = nframes;
     total_blocks = nblocks;
     frame_table = malloc(sizeof(int) * nframes);
     memset(frame_table, 0, sizeof(int) * nframes); // 0 means frame is free
 }
 
-void pager_create(pid_t pid){
+void pager_create(pid_t pid) {
     ProcessInfo *proc = malloc(sizeof(ProcessInfo));
     proc->pid = pid;
     proc->pages = NULL;
@@ -51,143 +51,136 @@ void pager_create(pid_t pid){
 }
 
 void *pager_extend(pid_t pid) {
-    // 1. Encontra o processo com o identificador dado.
     ProcessInfo *proc = find_process(pid);
-    if(!proc) return NULL;  // Se o processo não for encontrado, retorna NULL.
+    if (!proc) return NULL;
 
-    // 2. Verifica se o processo já alcançou o número máximo de páginas permitidas.
-    // EXISTE UM NUMERO MAXIMO DE PAGINAS?
-    if(proc->num_pages >= (total_blocks / 4)) {
-        errno = ENOMEM;  // Define errno para ENOMEM indicando falta de memória.
-        return NULL;     // Retorna NULL, indicando falha na alocação.
+    // Limite de alocação de páginas por processo
+    int max_pages_per_process = 8; // Limite fixo de 8 páginas por processo
+
+    // Verificar se o processo já atingiu o limite de páginas
+    if (proc->num_pages >= max_pages_per_process) {
+        return NULL;
     }
 
-    // 3. Aloca memória para a estrutura PageInfo.
+    // Criação da nova página
     PageInfo *page = malloc(sizeof(PageInfo));
-    page->frame = -1;  // Inicializa o campo frame com -1 (indica que a página não tem quadro alocado ainda).
-    page->next = proc->pages;  // Aponta para a página anterior (caso haja).
-
-    // 4. Define o endereço virtual da nova página.
-    if(proc->pages) {
-        // Se o processo já tem páginas, aloca a nova página em um endereço que é 0x1000 bytes maior que o endereço da página anterior.
-        page->vaddr = (void *)((intptr_t)proc->pages->vaddr + 0x1000);
-    } else {
-        // Se não há páginas existentes, define o endereço virtual da nova página para o endereço base (UVM_BASEADDR).
-        page->vaddr = (void *)(UVM_BASEADDR);
+    if (!page) {
+        return NULL; // Falha na alocação de memória
     }
 
-    // 5. Atualiza o ponteiro para a página do processo e incrementa o número de páginas.
+    // Calcula o endereço virtual da nova página
+    if (proc->num_pages == 0) {
+        page->vaddr = (void *)(UVM_BASEADDR);
+    } else {
+        page->vaddr = (void *)((intptr_t)proc->pages->vaddr + 0x1000);
+    }
+
+    page->frame = -1;  // Página ainda não alocada na memória
+    page->next = proc->pages;
     proc->pages = page;
     proc->num_pages++;
 
-    // 6. Retorna o endereço virtual da nova página.
+    // Retorna o endereço virtual da nova página
     return page->vaddr;
 }
 
-void pager_fault(pid_t pid, void *addr){
+
+void pager_fault(pid_t pid, void *addr) {
     ProcessInfo *proc = find_process(pid);
-    if(!proc) return;
+    if (!proc) return;
 
     PageInfo *page = proc->pages;
-    while (page && page->vaddr != addr){
+    while (page && page->vaddr != addr) {
         page = page->next;
     }
 
-    // Caso a página não esteja alocada, terminar o processo.
-    if(!page){
+    if (!page) {
         exit(EXIT_FAILURE);
     }
 
-    // Verifica se a página já está na memória
-    if(page->frame != -1){
-        // Se a página está na memória, ajustar permissões conforme necessário.
-        mmu_chprot(pid, addr, PROT_READ | PROT_WRITE);
-        return;
-    }
-
-    // Procura por um quadro de memória livre
-    int free_frame = -1;
-    for (int i = 0; i < total_frames; i++){
-        if(frame_table[i] == 0){
-            free_frame = i;
-            break;
-        }
-    }
-
-    if(free_frame == -1){
-        // Nenhum quadro livre encontrado, usar o algoritmo de segunda chance.
-        while (1){
-            if(clock_hand == total_frames){
-                clock_hand = 0;
-            }
-            PageInfo *p = proc->pages;
-            while (p){
-                if(frame_table[clock_hand] == p->frame){
-                    if(p->vaddr){
-                        // Página está na memória, desalocar e escrever no disco.
-                        mmu_nonresident(proc->pid, p->vaddr);
-                        mmu_disk_write(p->frame, clock_hand);
-                        frame_table[clock_hand] = 0;
-                        free_frame = clock_hand;
-                        clock_hand++;
-                        break;
-                    } else {
-                        // Ajustar permissões e avançar para a próxima página
-                        mmu_chprot(proc->pid, p->vaddr, PROT_NONE);
-                        p->frame = -1;
-                    }
+    if (page->frame == -1) {
+        int free_frame = -1;
+        while (free_frame == -1) {
+            for (int i = 0; i < total_frames; i++) {
+                if (frame_table[i] == 0) {
+                    free_frame = i;
+                    break;
                 }
-                p = p->next;
             }
-            if(free_frame != -1){
-                break;
-            }
-            clock_hand++;
-        }
-    }
 
-    // Ler a página do disco e preencher a memória.
-    mmu_disk_read(page->frame, free_frame);
-    mmu_zero_fill(free_frame); // Inicializa com zeros
-    mmu_resident(pid, addr, free_frame, PROT_READ | PROT_WRITE);
-    page->frame = free_frame;
-    frame_table[free_frame] = 1;
+            if (free_frame == -1) {
+                while (1) {
+                    if (clock_hand == total_frames) {
+                        clock_hand = 0;
+                    }
+                    PageInfo *p = proc->pages;
+                    while (p) {
+                        if (frame_table[clock_hand] == p->frame) {
+                            if (p->vaddr) {
+                                mmu_nonresident(proc->pid, p->vaddr);
+                                mmu_disk_write(p->frame, clock_hand);
+                                frame_table[clock_hand] = 0;
+                                free_frame = clock_hand;
+                                clock_hand++;
+                                break;
+                            } else {
+                                mmu_chprot(proc->pid, p->vaddr, PROT_NONE);
+                                p->frame = -1;
+                            }
+                        }
+                        p = p->next;
+                    }
+                    if (free_frame != -1) {
+                        break;
+                    }
+                    clock_hand++;
+                }
+            }
+        }
+
+        mmu_zero_fill(free_frame);
+        mmu_resident(pid, addr, free_frame, PROT_READ);
+        page->frame = free_frame;
+        frame_table[free_frame] = 1;
+    } else {
+        mmu_chprot(pid, addr, PROT_READ | PROT_WRITE);
+    }
 }
 
-int pager_syslog(pid_t pid, void *addr, size_t len){
+int pager_syslog(pid_t pid, void *addr, size_t len) {
     ProcessInfo *proc = find_process(pid);
-    if(!proc){
+    if (!proc) {
         errno = EINVAL;
         return -1;
     }
 
     char *buffer = malloc(len);
-    if(!buffer){
+    if (!buffer) {
         errno = ENOMEM;
         return -1;
     }
 
-    for (size_t i = 0; i < len; i++){
+    for (size_t i = 0; i < len; i++) {
         void *vaddr = (void *)((intptr_t)addr + i);
         PageInfo *page = proc->pages;
-        while (page && page->vaddr != (void *)((intptr_t)vaddr & ~0xFFF)){
+        while (page && page->vaddr != (void *)((intptr_t)vaddr & ~0xFFF)) {
             page = page->next;
         }
 
-        if(!page){
+        if (!page) {
             free(buffer);
             errno = EINVAL;
             return -1;
         }
 
-        if(page->frame == -1){
+        if (page->frame == -1) {
             pager_fault(pid, page->vaddr);
         }
 
         buffer[i] = *(char *)vaddr;
     }
 
-    for (size_t i = 0; i < len; i++){
+    for (size_t i = 0; i < len; i++) {
         printf("%02x", buffer[i]);
     }
     printf("\n");
@@ -196,25 +189,25 @@ int pager_syslog(pid_t pid, void *addr, size_t len){
     return 0;
 }
 
-void pager_destroy(pid_t pid){
+void pager_destroy(pid_t pid) {
     ProcessInfo *prev = NULL;
     ProcessInfo *proc = process_list;
 
-    while (proc && proc->pid != pid){
+    while (proc && proc->pid != pid) {
         prev = proc;
         proc = proc->next;
     }
 
-    if(!proc) return;
+    if (!proc) return;
 
-    if(prev){
+    if (prev) {
         prev->next = proc->next;
     } else {
         process_list = proc->next;
     }
 
     PageInfo *page = proc->pages;
-    while (page){
+    while (page) {
         PageInfo *next = page->next;
         free(page);
         page = next;
