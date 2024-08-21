@@ -1,0 +1,98 @@
+uvm_create starting
+  connecting unix socket [mmu.sock]
+  sending CREATE_REQ [54343]
+  waiting CREATE_REP
+  mapping pmem_fn [mmu.pmem.img.7E2xUg]
+  setting up SEGV handler
+  starting uvm_thread()
+  setting up uvm_exit() on_exit()
+uvm_create succeeded
+uvm_thread masking SEGV
+uvm_thread waiting message
+processing EXTEND_REP
+uvm_thread waiting message
+processing EXTEND_REP
+uvm_thread waiting message
+processing EXTEND_REP
+uvm_thread waiting message
+processing EXTEND_REP
+uvm_thread waiting message
+processing EXTEND_REP
+uvm_thread waiting message
+segv addr 0x60000000 code 1
+uvm_segv_action waiting service at condition variable
+processing REMAP_REP
+remapping 0x60000000 at offset 0 prot 1
+mprotect 0x60000000 prot 1
+uvm_thread waiting message
+processing SEGV_REP
+uvm_thread waiting message
+uvm_segv_action returning
+segv addr 0x60001000 code 1
+uvm_segv_action waiting service at condition variable
+processing REMAP_REP
+remapping 0x60001000 at offset 4096 prot 1
+mprotect 0x60001000 prot 1
+uvm_thread waiting message
+processing SEGV_REP
+uvm_thread waiting message
+uvm_segv_action returning
+segv addr 0x60001000 code 2
+uvm_segv_action waiting service at condition variable
+processing CHPROT_REP
+mprotect 0x60001000 prot 3
+uvm_thread waiting message
+processing SEGV_REP
+uvm_thread waiting message
+uvm_segv_action returning
+segv addr 0x60002000 code 1
+uvm_segv_action waiting service at condition variable
+processing REMAP_REP
+remapping 0x60002000 at offset 8192 prot 1
+mprotect 0x60002000 prot 1
+uvm_thread waiting message
+processing SEGV_REP
+uvm_thread waiting message
+uvm_segv_action returning
+segv addr 0x60003000 code 1
+uvm_segv_action waiting service at condition variable
+processing REMAP_REP
+remapping 0x60003000 at offset 12288 prot 1
+mprotect 0x60003000 prot 1
+uvm_thread waiting message
+processing SEGV_REP
+uvm_thread waiting message
+uvm_segv_action returning
+segv addr 0x60003000 code 2
+uvm_segv_action waiting service at condition variable
+processing CHPROT_REP
+mprotect 0x60003000 prot 3
+uvm_thread waiting message
+processing SEGV_REP
+uvm_thread waiting message
+uvm_segv_action returning
+segv addr 0x60004000 code 1
+uvm_segv_action waiting service at condition variable
+processing CHPROT_REP
+mprotect 0x60001000 prot 0
+uvm_thread waiting message
+processing CHPROT_REP
+mprotect 0x60001000 prot 0
+uvm_thread waiting message
+processing REMAP_REP
+remapping 0x60004000 at offset 0 prot 1
+mprotect 0x60004000 prot 1
+uvm_thread waiting message
+processing SEGV_REP
+uvm_thread waiting message
+uvm_segv_action returning
+segv addr 0x60001000 code 2
+uvm_segv_action waiting service at condition variable
+processing CHPROT_REP
+mprotect 0x60001000 prot 3
+uvm_thread waiting message
+processing SEGV_REP
+uvm_thread waiting message
+uvm_segv_action returning
+uvm_exit running
+uvm_thread exiting
